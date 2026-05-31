@@ -56,6 +56,9 @@
                 <button id="importBtn" class="bg-white hover:bg-gray-50 text-gray-800 border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
                     <i class="fas fa-upload"></i> Pulihkan Data
                 </button>
+                <button id="resetBtn" title="Reset Data Karyawan" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                    <i class="fas fa-trash-alt"></i> Reset Karyawan
+                </button>
                 <input type="file" id="fileInput" class="hidden" accept=".json">
             </div>
         </div>
@@ -313,6 +316,40 @@
 
         document.getElementById('importBtn').addEventListener('click', () => {
             document.getElementById('fileInput').click();
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', async () => {
+            const confirmMsg = `Apakah Anda yakin ingin menghapus SEMUA data libur untuk ${selectedEmployee.toUpperCase()}? Tindakan ini tidak dapat dibatalkan.`;
+            
+            if (confirm(confirmMsg)) {
+                updateSyncStatus('loading');
+                
+                // Clear local data first
+                attendanceData[selectedEmployee] = {};
+                saveToLocalStorage();
+                renderCalendar();
+
+                if (SCRIPT_URL) {
+                    try {
+                        await fetch(SCRIPT_URL, {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                action: 'reset',
+                                employee: selectedEmployee
+                            })
+                        });
+                        updateSyncStatus('online');
+                        alert(`Semua data ${selectedEmployee.toUpperCase()} berhasil direset.`);
+                    } catch (err) {
+                        console.error("Gagal reset data di cloud:", err);
+                        updateSyncStatus('offline');
+                        alert("Gagal mereset di cloud, tapi data lokal sudah dibersihkan.");
+                    }
+                } else {
+                    alert(`Data lokal ${selectedEmployee.toUpperCase()} berhasil dibersihkan.`);
+                    updateSyncStatus('offline');
+                }
+            }
         });
 
         document.getElementById('fileInput').addEventListener('change', (e) => {
