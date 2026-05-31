@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Absensi Karyawan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .calendar-day {
+            min-height: 100px;
+            transition: all 0.2s;
+        }
+        .calendar-day:hover {
+            background-color: #f3f4f6;
+            cursor: pointer;
+        }
+        .status-masuk {
+            background-color: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+        .status-libur {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+        .current-day {
+            border: 2px solid #3b82f6 !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">Dashboard Absensi</h1>
+                <p class="text-gray-600">Catat hari libur karyawan dengan mudah</p>
+            </div>
+            <div class="flex items-center gap-4 bg-white p-2 rounded-lg shadow-sm border">
+                <label class="font-medium text-gray-700">Pilih Karyawan:</label>
+                <select id="employeeSelect" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5">
+                    <option value="azis">Azis</option>
+                    <option value="akmal">Akmal</option>
+                    <option value="anggi">Anggi</option>
+                </select>
+            </div>
+            <div id="syncStatus" class="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500">
+                <i class="fas fa-circle text-[8px]"></i> <span>OFFLINE MODE</span>
+            </div>
+            <div class="flex gap-2">
+                <button id="exportBtn" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                    <i class="fas fa-download"></i> Cadangkan Data
+                </button>
+                <button id="importBtn" class="bg-white hover:bg-gray-50 text-gray-800 border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                    <i class="fas fa-upload"></i> Pulihkan Data
+                </button>
+                <input type="file" id="fileInput" class="hidden" accept=".json">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <!-- Stats Cards -->
+            <div class="lg:col-span-1 space-y-6">
+                <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
+                    <h3 class="text-gray-500 text-sm font-medium uppercase">Total Hari (Bulan Ini)</h3>
+                    <p id="statTotalDays" class="text-3xl font-bold text-gray-800">0</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-green-500">
+                    <h3 class="text-gray-500 text-sm font-medium uppercase">Jumlah Masuk</h3>
+                    <p id="statMasuk" class="text-3xl font-bold text-green-600">0</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-red-500">
+                    <h3 class="text-gray-500 text-sm font-medium uppercase">Jumlah Libur</h3>
+                    <p id="statLibur" class="text-3xl font-bold text-red-600">0</p>
+                </div>
+                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <p class="text-sm text-blue-800">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        Klik pada tanggal di kalender untuk mengubah status dari <b>Masuk</b> menjadi <b>Libur</b>.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Calendar Container -->
+            <div class="lg:col-span-3 bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="flex items-center justify-between p-4 border-b">
+                    <h2 id="monthDisplay" class="text-xl font-bold text-gray-800">Mei 2026</h2>
+                    <div class="flex gap-2">
+                        <button id="prevMonth" class="p-2 hover:bg-gray-100 rounded-full">
+                            <i class="fas fa-chevron-left text-gray-600"></i>
+                        </button>
+                        <button id="nextMonth" class="p-2 hover:bg-gray-100 rounded-full">
+                            <i class="fas fa-chevron-right text-gray-600"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-7 bg-gray-100 text-center py-2 text-sm font-bold text-gray-600 border-b">
+                    <div>MINGGU</div>
+                    <div>SENIN</div>
+                    <div>SELASA</div>
+                    <div>RABU</div>
+                    <div>KAMIS</div>
+                    <div>JUMAT</div>
+                    <div>SABTU</div>
+                </div>
+                
+                <div id="calendarGrid" class="grid grid-cols-7">
+                    <!-- Days will be generated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // CONFIGURATION: Ganti dengan URL Web App dari Google Apps Script Anda
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxr2Wym2_M3OWN80KJp08_FbUFFCb03KiPxI5reSOU_HIsH0cNqqfhz1jlsJKdpN93P/exec"; 
+
+        // State Management
+        let currentDate = new Date();
+        let selectedEmployee = 'azis';
+        
+        // Default structure
+        const defaultData = {
+            azis: {},
+            akmal: {},
+            anggi: {}
+        };
+
+        let attendanceData = { ...defaultData };
+        const syncStatus = document.getElementById('syncStatus');
+
+        function updateSyncStatus(status) {
+            if (status === 'loading') {
+                syncStatus.className = 'flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-600';
+                syncStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>MENYINKRONKAN...</span>';
+            } else if (status === 'online') {
+                syncStatus.className = 'flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-600';
+                syncStatus.innerHTML = '<i class="fas fa-circle text-[8px]"></i> <span>TERHUBUNG KE CLOUD</span>';
+            } else {
+                syncStatus.className = 'flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500';
+                syncStatus.innerHTML = '<i class="fas fa-circle text-[8px]"></i> <span>OFFLINE MODE</span>';
+            }
+        }
+
+        async function loadData() {
+            if (!SCRIPT_URL) {
+                // Use LocalStorage if no SCRIPT_URL
+                const savedData = JSON.parse(localStorage.getItem('attendanceData')) || {};
+                attendanceData = { ...defaultData, ...savedData };
+                renderCalendar();
+                return;
+            }
+
+            updateSyncStatus('loading');
+            try {
+                const response = await fetch(SCRIPT_URL);
+                const cloudData = await response.json();
+                attendanceData = { ...defaultData, ...cloudData };
+                saveToLocalStorage(); // Backup cloud data to local
+                updateSyncStatus('online');
+            } catch (err) {
+                console.error("Gagal sinkronisasi data:", err);
+                const savedData = JSON.parse(localStorage.getItem('attendanceData')) || {};
+                attendanceData = { ...defaultData, ...savedData };
+                updateSyncStatus('offline');
+            }
+            renderCalendar();
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('attendanceData', JSON.stringify(attendanceData));
+        }
+
+        async function toggleDay(dateStr) {
+            const isLibur = !attendanceData[selectedEmployee][dateStr];
+            
+            // Optimistic Update
+            if (!isLibur) {
+                delete attendanceData[selectedEmployee][dateStr];
+            } else {
+                attendanceData[selectedEmployee][dateStr] = true;
+            }
+            saveToLocalStorage();
+            renderCalendar();
+
+            if (SCRIPT_URL) {
+                updateSyncStatus('loading');
+                try {
+                    await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            date: dateStr,
+                            employee: selectedEmployee,
+                            isLibur: isLibur
+                        })
+                    });
+                    updateSyncStatus('online');
+                } catch (err) {
+                    console.error("Gagal mengirim data:", err);
+                    updateSyncStatus('offline');
+                    alert("Gagal menyimpan ke cloud. Data tersimpan secara lokal.");
+                }
+            }
+        }
+
+        const monthDisplay = document.getElementById('monthDisplay');
+        const calendarGrid = document.getElementById('calendarGrid');
+        const employeeSelect = document.getElementById('employeeSelect');
+        const statTotalDays = document.getElementById('statTotalDays');
+        const statMasuk = document.getElementById('statMasuk');
+        const statLibur = document.getElementById('statLibur');
+
+        const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", 
+                           "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+        function updateStats() {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            let liburCount = 0;
+            const employeeLibur = attendanceData[selectedEmployee] || {};
+            
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                if (employeeLibur[dateStr]) {
+                    liburCount++;
+                }
+            }
+
+            statTotalDays.innerText = daysInMonth;
+            statLibur.innerText = liburCount;
+            statMasuk.innerText = daysInMonth - liburCount;
+        }
+
+        function renderCalendar() {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            
+            monthDisplay.innerText = `${monthNames[month]} ${year}`;
+            
+            const firstDayOfMonth = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            calendarGrid.innerHTML = '';
+            
+            // Blank spaces for previous month days
+            for (let i = 0; i < firstDayOfMonth; i++) {
+                const blank = document.createElement('div');
+                blank.className = 'calendar-day bg-gray-50 border-b border-r';
+                calendarGrid.appendChild(blank);
+            }
+            
+            const today = new Date();
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+            // Actual days
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayEl = document.createElement('div');
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const isLibur = (attendanceData[selectedEmployee] || {})[dateStr];
+                
+                let statusClass = isLibur ? 'status-libur' : 'status-masuk';
+                let statusText = isLibur ? 'LIBUR' : 'MASUK';
+                let currentDayClass = dateStr === todayStr ? 'current-day' : '';
+
+                dayEl.className = `calendar-day p-2 border-b border-r flex flex-col ${currentDayClass}`;
+                dayEl.innerHTML = `
+                    <span class="font-bold text-gray-700">${day}</span>
+                    <div class="mt-2 flex-grow flex items-center justify-center rounded text-xs font-bold py-1 px-2 ${statusClass}">
+                        ${statusText}
+                    </div>
+                `;
+                
+                dayEl.addEventListener('click', () => toggleDay(dateStr));
+                calendarGrid.appendChild(dayEl);
+            }
+            
+            updateStats();
+        }
+
+        // Event Listeners
+        employeeSelect.addEventListener('change', (e) => {
+            selectedEmployee = e.target.value;
+            renderCalendar();
+        });
+
+        document.getElementById('prevMonth').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            loadData(); // Reload from cloud when month changes
+        });
+
+        document.getElementById('nextMonth').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            loadData(); // Reload from cloud when month changes
+        });
+
+        // Backup Features
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            const dataStr = JSON.stringify(attendanceData, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = `backup_absensi_${new Date().toISOString().slice(0,10)}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        });
+
+        document.getElementById('importBtn').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const importedData = JSON.parse(event.target.result);
+                    // Basic validation
+                    if (importedData.azis && importedData.akmal && importedData.anggi) {
+                        attendanceData = importedData;
+                        saveToLocalStorage();
+                        renderCalendar();
+                        alert('Data berhasil dipulihkan secara lokal! Jika ingin sinkron ke cloud, silakan klik ulang tanggal yang diperlukan.');
+                    } else {
+                        alert('Format file tidak valid!');
+                    }
+                } catch (err) {
+                    alert('Gagal membaca file!');
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        // Initial Render
+        loadData();
+    </script>
+</body>
+</html>
